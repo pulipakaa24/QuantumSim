@@ -25,13 +25,9 @@ class qReg:
         """Apply random Pauli errors to each qubit with given probability"""
         if self.error_prob <= 0:
             return
-
-        # Generate error gates for each qubit
         error_gates = [random.choices(ERROR_OPTIONS, weights=self.error_weights, k=1)[0] 
                      for _ in range(self.num)]
-
-        # Build full error operator (tensor product in little-endian order)
-        full_error = error_gates[0]  # q[0] (LSB) first
+        full_error = error_gates[0]
         for gate in error_gates[1:]:
             full_error = np.kron(full_error, gate)
 
@@ -50,6 +46,7 @@ class qReg:
             ibm_state[reversed_idx] = self.state[i]
             
         return ibm_state
+    
     def measure_all(self, shots=1):
         """Measure all qubits and return counts"""
         probs = np.abs(self.state)**2

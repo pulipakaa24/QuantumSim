@@ -53,7 +53,7 @@ def parse_operation(op_line):
     op_line = op_line.rstrip(';')
     parts = op_line.split()
     
-    if len(parts) == 1:  # Just gate name
+    if len(parts) == 1:
         return {'gate': parts[0], 'qubits': []}
     
     gate = parts[0]
@@ -73,11 +73,9 @@ def parse_operation(op_line):
 def apply_gate(qreg, gate, qubits):
     """Apply gate to quantum register"""
     if gate in GATE_MAP:
-        # Single-qubit gate
         target = qubits[0]
         qreg.state = apply_single_qubit_gate(GATE_MAP[gate], target, qreg)
     elif gate in TWO_QUBIT_GATES:
-        # Two-qubit gate
         control, target = qubits
         qreg.state = apply_two_qubit_gate(TWO_QUBIT_GATES[gate], control, target, qreg)
 
@@ -93,7 +91,7 @@ def simulate(qasm_code, shots=1024):
     counts = qreg.measure_all(shots)
     ibm_counts = {}
     for bits, count in counts.items():
-        reversed_bits = bits[::-1]  # Reverse bitstring
+        reversed_bits = bits[::-1] 
         ibm_counts[reversed_bits] = ibm_counts.get(reversed_bits, 0) + count
     
     return qreg.get_ibm_statevector(), ibm_counts
@@ -105,10 +103,9 @@ if __name__ == '__main__':
     qreg q[3];
     creg c[2];
     h q[1];
-    cx q[1], q[0];
     x q[2];
+    cx q[1], q[0];
     h q[1];
-
     """
     
     state_vector, counts = simulate(sample_qasm)
