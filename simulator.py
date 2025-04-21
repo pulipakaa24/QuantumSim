@@ -1,86 +1,119 @@
-
+import numpy as np
 from registers import qReg
+from Gate_Defs import *
+
+# Gate mappings (lowercase to match QASM)
+GATE_MAP = {
+    'x': X,
+    'y': Y,
+    'z': Z,
+    'h': H,
+    's': S,
+    't': T,
+    'sdg': SDG,
+    'tdg': TDG
+}
+
+TWO_QUBIT_GATES = {
+    'cx': CX,
+    'cz': CZ,
+    'cy': CY,
+    'ch': CH
+}
+
 def parse_qasm(qasm_code):
-    lines = qasm_code.strip().splitlines()
-    quantum_registers = {}
-    classical_registers = {}
-    operations = []
+    """Parse QASM code into quantum circuit"""
+    lines = [line.strip() for line in qasm_code.splitlines() if line.strip()]
     metadata = []
+    qregs = {}
+    cregs = {}
+    operations = []
 
     for line in lines:
-        line = line.strip()
-        if not line or line.startswith('//'):
-            continue
-        elif line.startswith("OPENQASM") or line.startswith("include"):
+        if line.startswith(('OPENQASM', 'include')):
             metadata.append(line)
-        elif line.startswith("qreg"):
-            name, size = line[5:].strip(" ;").split('[')
-            size = int(size.strip(']'))
-            quantum_registers[name.strip()] = size
-        elif line.startswith("creg"):
-            name, size = line[5:].strip(" ;").split('[')
-            size = int(size.strip(']'))
-            classical_registers[name.strip()] = size
+        elif line.startswith('qreg'):
+            name, size = line[4:].strip().rstrip(';').split('[')
+            qregs[name.strip()] = int(size.rstrip(']'))
+        elif line.startswith('creg'):
+            name, size = line[4:].strip().rstrip(';').split('[')
+            cregs[name.strip()] = int(size.rstrip(']'))
         else:
             operations.append(line)
 
     return {
-        "metadata": metadata,
-        "quantum_registers": quantum_registers,
-        "classical_registers": classical_registers,
-        "operations": operations
+        'metadata': metadata,
+        'qregs': qregs,
+        'cregs': cregs,
+        'operations': operations
     }
-def parse_operations(operations):
-    parsed_ops = []
 
-    for line in operations:
-        line = line.strip().rstrip(";")
-        op = {}
-
-        if line.startswith("if"):
-            start = line.find('(')
-            end = line.find(')')
-            condition = line[start + 1:end].strip()
-
-            cond_parts = condition.split("==")
-            reg = cond_parts[0].strip()
-            val = int(cond_parts[1].strip())
-            op["condition"] = {"creg": reg, "val": val}
-
-           
-            rest = line[end + 1:].strip()
-        else:
-            rest = line.strip()
-        if " " in rest:
-            gate, args = rest.split(" ", 1)
-            qubit_strs = [q.strip() for q in args.split(',')]
-            qubits = [int(q[q.find('[')+1:q.find(']')]) for q in qubit_strs]
-        else:
-            gate = rest
-            qubits = []
-
-        op["gate"] = gate
-        op["qubits"] = qubits
-        parsed_ops.append(op)
-
-    return parsed_ops
-sample_qasm = """
-OPENQASM 2.0;
-include "qelib1.inc";
-
-qreg q[2];
-creg c[2];
-if (c == 0) ch q[1], q[0];
-x q[1];
-cx q[0], q[1];
-
-"""
-
-data = parse_qasm(sample_qasm)
-q = qReg(data["quantum_registers"]['q'])
-operate = parse_operations(data["operations"])
-
-for op in operate:
-    print(op)
-#def simulate(shots):
+def parse_operation(op_line):
+    """Parse a single QASM operation"""
+    op_line = op_line.rstrip(';')
+    parts = op_line.split()
     
+    if len(parts) == 1:  # Just gate name
+        return {'gate': parts[0], 'qubits': []}
+    
+    gate = parts[0]
+    qubits = [q.strip() for q in ' '.join(parts[1:]).split(',')]
+    
+    # Extract qubit indices
+    qubit_indices = []
+    for q in qubits:
+        if '[' in q:
+            name, idx = q.split('[')
+            qubit_indices.append(int(idx.rstrip(']')))
+        else:
+            qubit_indices.append(int(q))
+    
+    return {'gate': gate, 'qubits': qubit_indices}
+
+def apply_gate(qreg, gate, qubits):
+    """Apply gate to quantum register"""
+    if gate in GATE_MAP:
+        # Single-qubit gate
+        target = qubits[0]
+        qreg.state = apply_single_qubit_gate(GATE_MAP[gate], target, qreg)
+    elif gate in TWO_QUBIT_GATES:
+        # Two-qubit gate
+        control, target = qubits
+        qreg.state = apply_two_qubit_gate(TWO_QUBIT_GATES[gate], control, target, qreg)
+
+def simulate(qasm_code, shots=1024):
+    parsed = parse_qasm(qasm_code)
+    qreg = qReg(parsed['qregs']['q'])
+    
+    for op_line in parsed['operations']:
+        op = parse_operation(op_line)
+        apply_gate(qreg, op['gate'], op['qubits'])
+    
+    # Get counts in IBM order
+    counts = qreg.measure_all(shots)
+    ibm_counts = {}
+    for bits, count in counts.items():
+        reversed_bits = bits[::-1]  # Reverse bitstring
+        ibm_counts[reversed_bits] = ibm_counts.get(reversed_bits, 0) + count
+    
+    return qreg.get_ibm_statevector(), ibm_counts
+
+if __name__ == '__main__':
+    sample_qasm = """
+    OPENQASM 2.0;
+    include "qelib1.inc";
+    qreg q[3];
+    creg c[2];
+    h q[1];
+    cx q[1], q[0];
+    x q[2];
+    h q[1];
+
+    """
+    
+    state_vector, counts = simulate(sample_qasm)
+    print("State Vector:")
+    print(state_vector)
+    print("\nMeasurement Counts:")
+    for outcome, count in sorted(counts.items()):
+        print(f"{outcome}: {count}")
