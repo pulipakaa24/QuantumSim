@@ -93,7 +93,6 @@ def apply_two_qubit_gate(gate, control, target, qreg):
     
     for basis_idx in range(dim):
         bits = [(basis_idx >> (qreg.num - 1 - i)) & 1 for i in range(qreg.num)]
-        
         # Apply gate condition
         if bits[control] == 1:
             if np.array_equal(gate, CX):  # CNOT gate
@@ -105,7 +104,7 @@ def apply_two_qubit_gate(gate, control, target, qreg):
             elif np.array_equal(gate, CZ):  # CZ gate
                 phase = -1 if bits[target] == 1 else 1
                 new_state[basis_idx] += phase * qreg.state[basis_idx]
-            # Add other gates as needed
+            
         else:
             new_state[basis_idx] += qreg.state[basis_idx]
     
