@@ -79,9 +79,9 @@ def apply_gate(qreg, gate, qubits):
         control, target = qubits
         qreg.state = apply_two_qubit_gate(TWO_QUBIT_GATES[gate], control, target, qreg)
 
-def simulate(qasm_code, shots=1024):
+def simulate(qasm_code,shots=1024, error=0):
     parsed = parse_qasm(qasm_code)
-    qreg = qReg(parsed['qregs']['q'])
+    qreg = qReg(parsed['qregs']['q'], error)
     
     for op_line in parsed['operations']:
         op = parse_operation(op_line)
@@ -107,8 +107,9 @@ if __name__ == '__main__':
     cx q[1], q[0];
     h q[1];
     """
-    
-    state_vector, counts = simulate(sample_qasm)
+    shots = 1024
+    error = 0.01
+    state_vector, counts = simulate(sample_qasm, shots, error)
     print("State Vector:")
     print(state_vector)
     print("\nMeasurement Counts:")
