@@ -14,7 +14,7 @@ TWO_QUBIT_GATES = {
 
 
 def parse_qasm(qasm_code):
-    """
+    """c
     Parse QASM into:
       metadata: list of include/OpenQASM lines
       qregs:    dict name->size
@@ -57,7 +57,6 @@ def parse_qasm(qasm_code):
                     'value': val,
                     'inner': inner
                 })
-
             # measurement
             elif head == 'measure':
                 _, src, _, dst = parts
@@ -69,7 +68,6 @@ def parse_qasm(qasm_code):
                     'creg': c_name,
                     'cbit': c_idx
                 })
-
             # normal gates
             else:
                 ops.append(_parse_one_op(line))
@@ -135,14 +133,17 @@ def simulate(qasm_code, shots=1024, error=0):
 if __name__ == '__main__':
     sample_qasm = """
     OPENQASM 2.0;
+    
     include "qelib1.inc";
+
     qreg q[3];
-    creg c[2];
-    h q[1];
-    x q[2];
-    cx q[1], q[0];
+    creg c[3];
+    h q[0];
+    ch q[0], q[1];
+    cy q[0], q[2];
+    measure q[0] -> c[0];
     measure q[1] -> c[1];
-    h q[1];
+    measure q[2] -> c[2];
     """
     shots = 1024
     error = 0.01
