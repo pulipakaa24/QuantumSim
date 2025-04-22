@@ -295,9 +295,3 @@ fig1.tight_layout()
 
 if __name__ == '__main__':
     root.mainloop()
-
-    print("State Vector:")
-    print(state_vector)
-    print("\nMeasurement Counts:")
-    for outcome, count in sorted(counts.items()):
-        print(f"{outcome}: {count}")
