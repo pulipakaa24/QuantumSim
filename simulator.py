@@ -108,22 +108,25 @@ def apply_gate(qreg, gate, qubits):
 def simulate(qasm_code, shots=1024, error=0):
     parsed = parse_qasm(qasm_code)
     qreg   = qReg(parsed['qregs']['q'], error)
-    # initialize classical registers
-    creg   = 0
+
+    # initialize each creg as its own integer
+    cregs = {name: 0 for name in parsed['cregs']}
 
     for op in parsed['operations']:
         if op['gate'] == 'if':
-            # only checking c[0] for simplicity
-            if creg == op['value']:
+            # now check the full integer value of that named register
+            if cregs[op['creg']] == op['value']:
                 inner = op['inner']
                 apply_gate(qreg, inner['gate'], inner['qubits'])
 
         elif op['gate'] == 'measure':
             bit = qreg.measure(op['qubit'])
-            creg += bit * 2**op['cbit']
+            # set that bit in the integer
+            cregs[op['creg']] |= (bit << op['cbit'])
 
         else:
             apply_gate(qreg, op['gate'], op.get('qubits', []))
+
 
     # final statevector + histogram
     statevec = qreg.get_ibm_statevector()
