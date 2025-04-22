@@ -43,20 +43,22 @@ def parse_qasm(qasm_code):
         else:
             parts = line.split()
             head = parts[0]
-
             # conditional if (c==v) op
             if head == 'if':
-                cond = parts[1].strip('()')   # e.g. "c==1"
+                cond_expr = ' '.join(parts[1:])
+                cond_part, inner_line = cond_expr.split(')', 1)
+                cond = cond_part.strip('()').replace(' ', '')
                 creg_name, val = cond.split('==')
                 val = int(val)
-                inner_line = ' '.join(parts[2:])
-                inner = _parse_one_op(inner_line)
+
+                inner = _parse_one_op(inner_line.strip())
                 ops.append({
                     'gate': 'if',
                     'creg': creg_name,
                     'value': val,
                     'inner': inner
                 })
+
             # measurement
             elif head == 'measure':
                 _, src, _, dst = parts
@@ -107,18 +109,18 @@ def simulate(qasm_code, shots=1024, error=0):
     parsed = parse_qasm(qasm_code)
     qreg   = qReg(parsed['qregs']['q'], error)
     # initialize classical registers
-    creg   = {name: [0]*size for name,size in parsed['cregs'].items()}
+    creg   = 0
 
     for op in parsed['operations']:
         if op['gate'] == 'if':
             # only checking c[0] for simplicity
-            if creg[op['creg']][0] == op['value']:
+            if creg == op['value']:
                 inner = op['inner']
                 apply_gate(qreg, inner['gate'], inner['qubits'])
 
         elif op['gate'] == 'measure':
             bit = qreg.measure(op['qubit'])
-            creg[op['creg']][op['cbit']] = bit
+            creg += bit * 2**op['cbit']
 
         else:
             apply_gate(qreg, op['gate'], op.get('qubits', []))
