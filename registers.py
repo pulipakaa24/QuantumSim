@@ -6,51 +6,52 @@ ERROR_OPTIONS = [X, Y, Z, I]
 
 class qReg:
     def __init__(self, num_qubits, error_prob=0):
-        """
-        Initialize quantum register in |0...0⟩ state (little-endian)
-        q[0] is least significant bit (rightmost in bitstring)
-        """
         self.num = num_qubits
         self.state = np.zeros(2**num_qubits, dtype=complex)
-        self.state[0] = 1 + 0j  # Initialize to |0...0⟩
+        self.state[0] = 1 + 0j
         self.error_prob = error_prob
-        self.error_weights = [
-            error_prob/3,  # X error
-            error_prob/3,  # Y error
-            error_prob/3,  # Z error
-            1 - error_prob  # No error (I)
-        ]
+        self.error_weights = [error_prob/3, error_prob/3, error_prob/3, 1-error_prob]
 
     def error_tick(self):
-        """Apply random Pauli errors to each qubit with given probability"""
         if self.error_prob <= 0:
             return
-        error_gates = [random.choices(ERROR_OPTIONS, weights=self.error_weights, k=1)[0] 
-                     for _ in range(self.num)]
+        error_gates = random.choices(ERROR_OPTIONS, weights=self.error_weights, k=self.num)
         full_error = error_gates[0]
-        for gate in error_gates[1:]:
-            full_error = np.kron(full_error, gate)
-
+        for g in error_gates[1:]:
+            full_error = np.kron(full_error, g)
         self.state = full_error @ self.state
+
     def get_ibm_statevector(self):
-        """Return state vector in IBM display order (q0 as MSB)"""
         n = self.num
         ibm_state = np.zeros(2**n, dtype=complex)
-        
         for i in range(2**n):
-            # Convert index to binary string
-            bits = format(i, f'0{n}b')
-            # Reverse the bit order for IBM display
-            reversed_bits = bits[::-1]
-            reversed_idx = int(reversed_bits, 2)
-            ibm_state[reversed_idx] = self.state[i]
-            
+            bits = format(i, f'0{n}b')[::-1]
+            ibm_state[int(bits,2)] = self.state[i]
         return ibm_state
-    
+
     def measure_all(self, shots=1):
-        """Measure all qubits and return counts"""
         probs = np.abs(self.state)**2
         outcomes = np.random.choice(len(probs), size=shots, p=probs)
-        counts = {format(outcome, f'0{self.num}b'): np.count_nonzero(outcomes == outcome) 
-                 for outcome in outcomes}
-        return counts
+        return {format(o, f'0{self.num}b'): np.count_nonzero(outcomes==o) for o in outcomes}
+
+    def measure(self, target):
+        """
+        Measure a single qubit at index `target`, collapse state, and return 0 or 1.
+        """
+        # compute marginal probabilities
+        zero_inds = []
+        one_inds = []
+        for idx in range(len(self.state)):
+            bit = (idx >> target) & 1
+            (one_inds if bit else zero_inds).append(idx)
+        p0 = np.sum(np.abs(self.state[zero_inds])**2)
+        result = np.random.rand() >= p0
+        # collapse
+        keep = one_inds if result else zero_inds
+        new_state = np.zeros_like(self.state)
+        new_state[keep] = self.state[keep]
+        # renormalize
+        if np.sum(np.abs(new_state)**2) > 0:
+            new_state /= np.linalg.norm(new_state)
+        self.state = new_state
+        return int(result)

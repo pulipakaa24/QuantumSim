@@ -4,97 +4,133 @@ from Gate_Defs import *
 
 # Gate mappings (lowercase to match QASM)
 GATE_MAP = {
-    'x': X,
-    'y': Y,
-    'z': Z,
-    'h': H,
-    's': S,
-    't': T,
-    'sdg': SDG,
-    'tdg': TDG
+    'x': X, 'y': Y, 'z': Z, 'h': H,
+    's': S, 't': T, 'sdg': SDG, 'tdg': TDG
 }
 
 TWO_QUBIT_GATES = {
-    'cx': CX,
-    'cz': CZ,
-    'cy': CY,
-    'ch': CH
+    'cx': CX, 'cz': CZ, 'cy': CY, 'ch': CH
 }
 
+
 def parse_qasm(qasm_code):
-    """Parse QASM code into quantum circuit"""
-    lines = [line.strip() for line in qasm_code.splitlines() if line.strip()]
-    metadata = []
-    qregs = {}
-    cregs = {}
-    operations = []
+    """
+    Parse QASM into:
+      metadata: list of include/OpenQASM lines
+      qregs:    dict name->size
+      cregs:    dict name->size
+      operations: list of dicts, each one is either
+         - a gate:     {'gate':'h','qubits':[1]}
+         - a measure:  {'gate':'measure', 'qubit':2, 'creg':'c','cbit':1}
+         - a cond‑op:  {'gate':'if','creg':'c','value':1,
+                        'inner':{'gate':'x','qubits':[0]}}
+    """
+    lines = [ln.strip().rstrip(';') for ln in qasm_code.splitlines() if ln.strip()]
+    metadata, qregs, cregs, ops = [], {}, {}, []
 
     for line in lines:
         if line.startswith(('OPENQASM', 'include')):
             metadata.append(line)
+
         elif line.startswith('qreg'):
-            name, size = line[4:].strip().rstrip(';').split('[')
-            qregs[name.strip()] = int(size.rstrip(']'))
+            name, size = line[len('qreg'):].strip().split('[')
+            qregs[name] = int(size.rstrip(']'))
+
         elif line.startswith('creg'):
-            name, size = line[4:].strip().rstrip(';').split('[')
-            cregs[name.strip()] = int(size.rstrip(']'))
+            name, size = line[len('creg'):].strip().split('[')
+            cregs[name] = int(size.rstrip(']'))
+
         else:
-            operations.append(line)
+            parts = line.split()
+            head = parts[0]
+
+            # conditional if (c==v) op
+            if head == 'if':
+                cond = parts[1].strip('()')   # e.g. "c==1"
+                creg_name, val = cond.split('==')
+                val = int(val)
+                inner_line = ' '.join(parts[2:])
+                inner = _parse_one_op(inner_line)
+                ops.append({
+                    'gate': 'if',
+                    'creg': creg_name,
+                    'value': val,
+                    'inner': inner
+                })
+
+            # measurement
+            elif head == 'measure':
+                _, src, _, dst = parts
+                q_name, q_idx = src.split('['); q_idx = int(q_idx.rstrip(']'))
+                c_name, c_idx = dst.split('['); c_idx = int(c_idx.rstrip(']'))
+                ops.append({
+                    'gate': 'measure',
+                    'qubit': q_idx,
+                    'creg': c_name,
+                    'cbit': c_idx
+                })
+
+            # normal gates
+            else:
+                ops.append(_parse_one_op(line))
 
     return {
-        'metadata': metadata,
-        'qregs': qregs,
-        'cregs': cregs,
-        'operations': operations
+        'metadata':   metadata,
+        'qregs':      qregs,
+        'cregs':      cregs,
+        'operations': ops
     }
 
-def parse_operation(op_line):
-    """Parse a single QASM operation"""
-    op_line = op_line.rstrip(';')
+
+def _parse_one_op(op_line):
+    """Helper to parse a single gate line like 'cx q[1], q[0]'."""
     parts = op_line.split()
-    
-    if len(parts) == 1:
-        return {'gate': parts[0], 'qubits': []}
-    
     gate = parts[0]
-    qubits = [q.strip() for q in ' '.join(parts[1:]).split(',')]
-    
-    # Extract qubit indices
-    qubit_indices = []
-    for q in qubits:
-        if '[' in q:
-            name, idx = q.split('[')
-            qubit_indices.append(int(idx.rstrip(']')))
+    tokens = [t.strip() for t in ' '.join(parts[1:]).split(',') if t.strip()]
+    idxs = []
+    for tok in tokens:
+        if '[' in tok:
+            _, num = tok.split('[')
+            idxs.append(int(num.rstrip(']')))
         else:
-            qubit_indices.append(int(q))
-    
-    return {'gate': gate, 'qubits': qubit_indices}
+            idxs.append(int(tok))
+    return {'gate': gate, 'qubits': idxs}
+
 
 def apply_gate(qreg, gate, qubits):
-    """Apply gate to quantum register"""
+    """Apply single- or two-qubit gates."""
     if gate in GATE_MAP:
-        target = qubits[0]
-        qreg.state = apply_single_qubit_gate(GATE_MAP[gate], target, qreg)
+        qreg.state = apply_single_qubit_gate(GATE_MAP[gate], qubits[0], qreg)
     elif gate in TWO_QUBIT_GATES:
-        control, target = qubits
-        qreg.state = apply_two_qubit_gate(TWO_QUBIT_GATES[gate], control, target, qreg)
+        qreg.state = apply_two_qubit_gate(TWO_QUBIT_GATES[gate], qubits[0], qubits[1], qreg)
 
-def simulate(qasm_code,shots=1024, error=0):
+
+def simulate(qasm_code, shots=1024, error=0):
     parsed = parse_qasm(qasm_code)
-    qreg = qReg(parsed['qregs']['q'], error)
-    
-    for op_line in parsed['operations']:
-        op = parse_operation(op_line)
-        apply_gate(qreg, op['gate'], op['qubits'])
-    
-    # Get counts in IBM order
-    counts = qreg.measure_all(shots)
-    ibm_counts = {}
-    for bits, count in counts.items():
-        reversed_bits = bits[::-1] 
-        ibm_counts[reversed_bits] = ibm_counts.get(reversed_bits, 0) + count
-    
-    return qreg.get_ibm_statevector(), ibm_counts
+    qreg   = qReg(parsed['qregs']['q'], error)
+    # initialize classical registers
+    creg   = {name: [0]*size for name,size in parsed['cregs'].items()}
+
+    for op in parsed['operations']:
+        if op['gate'] == 'if':
+            # only checking c[0] for simplicity
+            if creg[op['creg']][0] == op['value']:
+                inner = op['inner']
+                apply_gate(qreg, inner['gate'], inner['qubits'])
+
+        elif op['gate'] == 'measure':
+            bit = qreg.measure(op['qubit'])
+            creg[op['creg']][op['cbit']] = bit
+
+        else:
+            apply_gate(qreg, op['gate'], op.get('qubits', []))
+
+    # final statevector + histogram
+    statevec = qreg.get_ibm_statevector()
+    counts   = qreg.measure_all(shots)
+    # reformat counts into IBM bit-order
+    ibm_counts = {k[::-1]: v for k,v in counts.items()}
+    return statevec, ibm_counts
 
 if __name__ == '__main__':
     sample_qasm = """
@@ -105,6 +141,7 @@ if __name__ == '__main__':
     h q[1];
     x q[2];
     cx q[1], q[0];
+    measure q[1] -> c[1];
     h q[1];
     """
     shots = 1024
