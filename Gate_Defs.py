@@ -52,7 +52,6 @@ def apply_two_qubit_gate(gate, ctrl, tgt, qreg):
                 orig = bits[tgt]
                 bits_copy[tgt] ^= 1
                 j = sum(b << (qreg.num - 1 - k) for k, b in enumerate(bits_copy))
-                # Y: |0>→i|1>, |1>→−i|0>
                 factor =  1j if orig == 0 else -1j
                 new[j] += factor * amp
             #splits amplitude

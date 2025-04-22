@@ -131,23 +131,15 @@ def simulate(qasm_code, shots=1024, error=0):
     return statevec, ibm_counts
 
 if __name__ == '__main__':
-    sample_qasm = """
-    OPENQASM 2.0;
-    
-    include "qelib1.inc";
+    with open('input.qasm', 'r') as file:
+        qasm_code = file.read()
 
-    qreg q[3];
-    creg c[3];
-    h q[0];
-    ch q[0], q[1];
-    cy q[0], q[2];
-    measure q[0] -> c[0];
-    measure q[1] -> c[1];
-    measure q[2] -> c[2];
-    """
     shots = 1024
     error = 0.01
-    state_vector, counts = simulate(sample_qasm, shots, error)
+
+    state_vector, counts = simulate(qasm_code, shots, error)
+
+    # Display the results
     print("State Vector:")
     print(state_vector)
     print("\nMeasurement Counts:")
