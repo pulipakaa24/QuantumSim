@@ -33,6 +33,28 @@ def U(theta, phi, lam):
     ], dtype=complex)
 
 
+GATE_MAP = {
+    'x':       X,
+    'y':       Y,
+    'z':       Z,
+    'h':       H,
+    's':       S,
+    't':       T,
+    'sdg':     SDG,
+    'tdg':     TDG,
+    'rx':      RX,       
+    'ry':      RY,       
+    'rz':      RZ,       
+    'u':       U,       
+
+}
+TWO_QUBIT_GATES = {
+    'cx': CX,
+    'cz': CZ,
+    'cy': CY,
+    'ch': CH
+}
+
 # Helpers
 
 def reset(target):

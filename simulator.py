@@ -1,32 +1,12 @@
 from registers import qReg
 from Gate_Defs import *
+from Gate_Defs import GATE_MAP, TWO_QUBIT_GATES
 from tkinter import *
 from tkinter import filedialog
 import os
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
 
-GATE_MAP = {
-    'x':       X,
-    'y':       Y,
-    'z':       Z,
-    'h':       H,
-    's':       S,
-    't':       T,
-    'sdg':     SDG,
-    'tdg':     TDG,
-    'rx':      RX,       
-    'ry':      RY,       
-    'rz':      RZ,       
-    'u':       U,       
-
-}
-TWO_QUBIT_GATES = {
-    'cx': CX,
-    'cz': CZ,
-    'cy': CY,
-    'ch': CH
-}
 
 
 def parse_qasm(qasm_code):
