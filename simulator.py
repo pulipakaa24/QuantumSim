@@ -3,6 +3,8 @@ from Gate_Defs import *
 from tkinter import *
 from tkinter import filedialog
 import os
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import matplotlib.pyplot as plt
 
 GATE_MAP = {
     'x':       X,
@@ -159,7 +161,7 @@ def simulate(qasm_code, shots=1024, error=0):
     parsed = parse_qasm(qasm_code)
     qreg   = qReg(parsed['qregs']['q'], error)
     # initialize classical registers
-    creg = {name: [0]*size for name,size in parsed['cregs'].items()}
+    cregs = {name: 0 for name in parsed['cregs']}
 
     for op in parsed['operations']:
         if op['gate'] == 'if':
@@ -174,17 +176,30 @@ def simulate(qasm_code, shots=1024, error=0):
         else:
             apply_gate(qreg, op['gate'], op.get('qubits', []), op.get('params', []))
 
+        qreg.error_tick()
+
     statevec = qreg.get_ibm_statevector()
     counts   = qreg.measure_all(shots)
     ibm_counts = {k[::-1]: v for k, v in counts.items()}
     return statevec, ibm_counts
 
-def only_numeric(char):
-    return char.isdigit()
+
+def only_numeric(new_val):
+    return new_val.isdigit() or new_val == ""
+
+def only_float(val):
+    if val == "":
+        return True  # allow clearing the entry
+    try:
+        float(val)
+        return True
+    except ValueError:
+        return False
 
 filePath = None
 
 def getFile():
+    global filePath
     filePath = filedialog.askopenfilename(title="Select a QASM file")
     if filePath:
         name, ext = os.path.splitext(filePath)
@@ -192,32 +207,94 @@ def getFile():
             print("Invalid File")
             filePath = None
 
+            
+def update_graph(counts_dict):
+    ax.clear()
+    ax.set_title("Results")
+    ax.set_xlabel("States")
+    ax.set_ylabel("Counts")
+    labels = list(counts_dict.keys())
+    values = list(counts_dict.values())
+    ax.bar(labels, values)
+    fig.tight_layout()
+    canvas.draw()
+
+def update_statevec(labels, mags, colors):
+    ax1.clear()
+    ax1.bar(list(labels), list(mags), color=colors)
+    ax1.set_ylabel("Magnitude")
+    ax1.set_xlabel("States")
+    ax1.set_title("Statevector")
+    fig1.tight_layout()
+    canvas1.draw()
+
+def sim():
+  with open(filePath, 'r') as file:
+        qasm_code = file.read()
+  
+  passingShots = shots.get()
+  passingError = errRate.get()
+  stateVec, cts = simulate(qasm_code, passingShots, passingError)
+
+  num_qubits = int(np.log2(len(stateVec)))
+  labels = [format(i, f'0{num_qubits}b') for i in range(len(stateVec))]
+
+  mags = np.abs(stateVec)
+  phases = np.angle(stateVec)
+  norm_phases = (phases + np.pi) / (2 * np.pi)
+
+  import matplotlib.colors as mcolors
+  colors = [mcolors.hsv_to_rgb((hue, 1, 1)) for hue in norm_phases]
+
+  update_statevec(labels, mags, colors)
+
+
+  update_graph(dict(sorted(cts.items())))
+
+
+root = Tk()
+root.title("Quantum Simulator GUI")
+
+vcmd = (root.register(only_numeric), '%S')
+vcmdFlt = (root.register(only_float), '%P')
+Label(root, text="Shots:").grid(row=0, column=3)
+shots = IntVar()
+entry = Entry(root, validate='key', validatecommand=vcmd, textvariable=shots)
+entry.grid(row=1, column=3)
+Label(root, text="Error Rate:").grid(row=2, column=3)
+errRate = DoubleVar()
+entry = Entry(root, validate='key', validatecommand=vcmdFlt, textvariable=errRate)
+entry.grid(row=3, column=3)
+
+
+fileButton = Button(root, text="Select QASM", width=10, command=getFile)
+fileButton.grid(row=4, column=3)
+
+startButton = Button(root, text="Run Simulation", width=10, command=sim)
+startButton.grid(row=5, column=3)
+
+
+# Create the figure and axes
+fig, ax = plt.subplots(figsize=(4, 2))
+canvas = FigureCanvasTkAgg(fig, master=root)
+canvas.get_tk_widget().grid(row=0, column=0, rowspan=10, columnspan=2)  # left side of window
+ax.set_title("Results")
+ax.set_xlabel("States")
+ax.set_ylabel("Counts")
+ax.bar([0, 1], [0, 0])
+fig.tight_layout()
+
+fig1, ax1 = plt.subplots(figsize=(4, 2))
+canvas1 = FigureCanvasTkAgg(fig1, master=root)
+canvas1.get_tk_widget().grid(row=10, column=0, rowspan=10, columnspan=2)
+ax1.bar([0,1], [0,0])
+ax1.set_ylabel("Magnitude")
+ax1.set_xlabel("States")
+ax1.set_title("Statevector")
+fig1.tight_layout()
+
 if __name__ == '__main__':
-    root = Tk()
-    root.title("Quantum Simulator GUI")
-
-    vcmd = (root.register(only_numeric), '%S')
-    Label(root, text="Shots:").grid(row=3, column=3)
-    shots = IntVar()
-    entry = Entry(root, validate='key', validatecommand=vcmd, textvariable=shots)
-    entry.grid(row=4, column=3)
-
-
     root.mainloop()
-    sample_qasm = """
-    OPENQASM 2.0;
-    include "qelib1.inc";
-    qreg q[3];
-    creg c[2];
-    h q[1];
-    x q[2];
-    cx q[1], q[0];
-    measure q[1] -> c[1];
-    h q[1];
-    """
-    shots = 1024
-    error = 0.01
-    state_vector, counts = simulate(qasm_code, shots, error)
 
     print("State Vector:")
     print(state_vector)
