@@ -1,5 +1,5 @@
 import numpy as np
-from math import pi, sqrt
+from math import pi, sqrt, cos, sin
 
 # Two-qubit gates
 CX = np.array([[1,0,0,0],[0,1,0,0],[0,0,0,1],[0,0,1,0]])
@@ -17,6 +17,21 @@ S   = np.array([[1,0],[0,1j]])
 T   = np.array([[1,0],[0,np.exp(1j*pi/4)]])
 SDG = S.conj().T
 TDG = T.conj().T
+
+def RX(theta):
+    return np.cos(theta/2)*I - 1j*np.sin(theta/2)*X
+def RY(theta):
+    return np.cos(theta/2)*I - 1j*np.sin(theta/2)*Y
+def RZ(theta):
+    return np.cos(theta/2)*I - 1j*np.sin(theta/2)*Z
+def U(theta, phi, lam):
+    c = np.cos(theta/2)
+    s = np.sin(theta/2)
+    return np.array([
+        [               c, -np.exp(1j*lam) * s ],
+        [ np.exp(1j*phi) * s, np.exp(1j*(phi+lam)) * c ]
+    ], dtype=complex)
+
 
 # Helpers
 
