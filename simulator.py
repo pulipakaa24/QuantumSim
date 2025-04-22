@@ -1,6 +1,8 @@
-import numpy as np
 from registers import qReg
 from Gate_Defs import *
+from tkinter import *
+from tkinter import filedialog
+import os
 
 GATE_MAP = {
     'x':       X,
@@ -156,7 +158,8 @@ def apply_gate(qreg, gate, qubits, params=None):
 def simulate(qasm_code, shots=1024, error=0):
     parsed = parse_qasm(qasm_code)
     qreg   = qReg(parsed['qregs']['q'], error)
-    cregs  = {name: 0 for name in parsed['cregs']}
+    # initialize classical registers
+    creg = {name: [0]*size for name,size in parsed['cregs'].items()}
 
     for op in parsed['operations']:
         if op['gate'] == 'if':
@@ -176,11 +179,42 @@ def simulate(qasm_code, shots=1024, error=0):
     ibm_counts = {k[::-1]: v for k, v in counts.items()}
     return statevec, ibm_counts
 
+def only_numeric(char):
+    return char.isdigit()
+
+filePath = None
+
+def getFile():
+    filePath = filedialog.askopenfilename(title="Select a QASM file")
+    if filePath:
+        name, ext = os.path.splitext(filePath)
+        if ext != ".qasm":
+            print("Invalid File")
+            filePath = None
 
 if __name__ == '__main__':
-    with open('input.qasm', 'r') as file:
-        qasm_code = file.read()
+    root = Tk()
+    root.title("Quantum Simulator GUI")
 
+    vcmd = (root.register(only_numeric), '%S')
+    Label(root, text="Shots:").grid(row=3, column=3)
+    shots = IntVar()
+    entry = Entry(root, validate='key', validatecommand=vcmd, textvariable=shots)
+    entry.grid(row=4, column=3)
+
+
+    root.mainloop()
+    sample_qasm = """
+    OPENQASM 2.0;
+    include "qelib1.inc";
+    qreg q[3];
+    creg c[2];
+    h q[1];
+    x q[2];
+    cx q[1], q[0];
+    measure q[1] -> c[1];
+    h q[1];
+    """
     shots = 1024
     error = 0.01
     state_vector, counts = simulate(qasm_code, shots, error)
